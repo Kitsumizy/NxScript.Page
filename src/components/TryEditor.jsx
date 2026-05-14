@@ -26,7 +26,6 @@ trace("Player HP: " + p.hp)
   const [interp, setInterp] = useState(null)
 
   useEffect(() => {
-    // Load nxscript.js from public folder
     const script = document.createElement('script')
     script.src = '/nxscript.js'
     script.onload = () => {
@@ -50,12 +49,12 @@ trace("Player HP: " + p.hp)
       return
     }
 
+    setOutput(prev => [...prev, { type: 'info', text: 'Running...' }])
+
     try {
       const error = window.nxs_run(interp.vmId, code, 'repl.nx')
       if (error) {
         setOutput(prev => [...prev, { type: 'error', text: error }])
-      } else {
-        setOutput(prev => [...prev, { type: 'success', text: '✓ Code executed' }])
       }
     } catch (e) {
       setOutput(prev => [...prev, { type: 'error', text: e.message }])
@@ -66,8 +65,10 @@ trace("Player HP: " + p.hp)
     setOutput([])
   }
 
-  const loadExample = (example) => {
-    setCode(example)
+  const loadExample = (value) => {
+    if (value) {
+      setCode(value)
+    }
   }
 
   return (
@@ -82,9 +83,9 @@ trace("Player HP: " + p.hp)
             value=""
           >
             <option value="" disabled>Load Example...</option>
-            <option value="var x = 5\ntrace(x)">Variables</option>
-            <option value="func add(a, b) {\n    return a + b\n}\ntrace(add(3, 4))">Functions</option>
-            <option value="class Player {\n    var hp = 100\n    func takeDamage(n) {\n        this.hp -= n\n    }\n}\n\nvar p = new Player()\ntrace(p.hp)">Classes</option>
+            <option value={`var x = 5\ntrace(x)`}>Variables</option>
+            <option value={`func add(a, b) {\n    return a + b\n}\ntrace(add(3, 4))`}>Functions</option>
+            <option value={`class Player {\n    var hp = 100\n    func takeDamage(n) {\n        this.hp -= n\n    }\n}\n\nvar p = new Player()\ntrace(p.hp)`}>Classes</option>
           </select>
         </div>
         <Editor
@@ -108,7 +109,11 @@ trace("Player HP: " + p.hp)
             <span style={{ color: 'var(--text-secondary)' }}>Run code to see output...</span>
           ) : (
             output.map((line, i) => (
-              <div key={i} className={line.type === 'error' ? 'output-error' : 'output-success'}>
+              <div key={i} className={
+                line.type === 'error' ? 'output-error' : 
+                line.type === 'success' ? 'output-success' : 
+                'output-info'
+              }>
                 {line.text}
               </div>
             ))

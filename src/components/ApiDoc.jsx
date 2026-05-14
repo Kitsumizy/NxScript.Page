@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 function ApiDoc() {
   const [apiData, setApiData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [expandedClass, setExpandedClass] = useState(null)
 
   useEffect(() => {
     fetch('/api.xml')
@@ -11,19 +12,22 @@ function ApiDoc() {
         const parser = new DOMParser()
         const doc = parser.parseFromString(xml, 'text/xml')
         
-        // Parse classes
         const classes = []
         const classNodes = doc.querySelectorAll('class')
         classNodes.forEach(cls => {
           const methods = []
           const methodNodes = cls.querySelectorAll('method')
           methodNodes.forEach(method => {
-            methods.push({
-              name: method.getAttribute('name'),
-              params: Array.from(method.querySelectorAll('param')).map(p => ({
+            const params = []
+            method.querySelectorAll('param').forEach(p => {
+              params.push({
                 name: p.getAttribute('name'),
                 type: p.getAttribute('type')
-              })),
+              })
+            })
+            methods.push({
+              name: method.getAttribute('name'),
+              params: params,
               returns: method.getAttribute('returns'),
               description: method.querySelector('description')?.textContent || ''
             })
@@ -46,12 +50,28 @@ function ApiDoc() {
       })
   }, [])
 
+  const toggleClass = (index) => {
+    setExpandedClass(expandedClass === index ? null : index)
+  }
+
   if (loading) {
-    return <div className="api-container">Loading API documentation...</div>
+    return (
+      <div className="api-container">
+        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+          Loading API documentation...
+        </div>
+      </div>
+    )
   }
 
   if (!apiData || apiData.classes.length === 0) {
-    return <div className="api-container">No API documentation available</div>
+    return (
+      <div className="api-container">
+        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+          No API documentation available
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -59,20 +79,54 @@ function ApiDoc() {
       <h1 style={{ marginBottom: '2rem', color: 'var(--accent)' }}>API Reference</h1>
       
       {apiData.classes.map((cls, i) => (
-        <div key={i} className="api-class">
-          <h2>{cls.name}</h2>
-          {cls.description && <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>{cls.description}</p>}
+        <div key={i} className="api-class" style={{ 
+          marginBottom: '1rem',
+          borderBottom: '1px solid var(--border)',
+          paddingBottom: '1rem'
+        }}>
+          <button 
+            onClick={() => toggleClass(i)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--accent)',
+              fontSize: '1.3rem',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              textAlign: 'left',
+              width: '100%',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}
+          >
+            <span>{cls.name}</span>
+            <span>{expandedClass === i ? '−' : '+'}</span>
+          </button>
           
-          {cls.methods.length > 0 && (
-            <div>
-              <h3 style={{ marginTop: '1.5rem', marginBottom: '1rem' }}>Methods</h3>
+          {cls.description && expandedClass === i && (
+            <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>{cls.description}</p>
+          )}
+          
+          {expandedClass === i && cls.methods.length > 0 && (
+            <div style={{ marginTop: '1rem', paddingLeft: '1rem', borderLeft: '2px solid var(--border)' }}>
+              <h4 style={{ color: 'var(--text-primary)', marginBottom: '0.5rem' }}>Methods</h4>
               {cls.methods.map((method, j) => (
-                <div key={j} className="api-method">
-                  <h3>
-                    {method.name}({method.params.map(p => `${p.name}: ${p.type}`).join(', ')})
-                    {method.returns && ` → ${method.returns}`}
-                  </h3>
-                  {method.description && <p>{method.description}</p>}
+                <div key={j} className="api-method" style={{
+                  background: 'var(--bg-tertiary)',
+                  padding: '0.8rem',
+                  borderRadius: '6px',
+                  marginBottom: '0.5rem'
+                }}>
+                  <code style={{ color: 'var(--success)', fontSize: '0.9rem' }}>
+                    {method.name}({method.params.map(p => `${p.name}${p.type ? ': ' + p.type : ''}`).join(', ')})
+                    {method.returns && <span style={{ color: 'var(--text-secondary)' }}> → {method.returns}</span>}
+                  </code>
+                  {method.description && (
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '0.3rem' }}>
+                      {method.description}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>

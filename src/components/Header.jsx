@@ -1,9 +1,13 @@
 import { Link } from 'react-router-dom'
+import logo from '/logo.png'
 
 function Header() {
   return (
     <header className="header">
-      <Link to="/" className="header-logo">NxScript</Link>
+      <Link to="/" className="header-logo">
+        <img src={logo} alt="NxScript" style={{ height: '32px', verticalAlign: 'middle', marginRight: '0.5rem' }} />
+        NxScript
+      </Link>
       <nav className="header-nav">
         <Link to="/docs">Docs</Link>
         <Link to="/api">API</Link>

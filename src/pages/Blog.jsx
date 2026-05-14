@@ -1,9 +1,9 @@
 function Blog() {
   const posts = [
     {
-      slug: 'hello-world',
+      slug: 'welcome-to-nxscript',
       title: 'Welcome to NxScript!',
-      date: '2024-01-15',
+      date: '2026-05-14',
       excerpt: 'NxScript is a new scripting language for Haxe. Here\'s what makes it special...',
       content: `
 ## Welcome to NxScript!
@@ -51,10 +51,10 @@ Stay tuned for more updates!
           }}>
             <h2 style={{ color: 'var(--accent)', marginBottom: '0.5rem' }}>{post.title}</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-              {post.date}
+              {new Date(post.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
             <div style={{ color: 'var(--text-secondary)', lineHeight: '1.8' }}>
-              {post.content.split('\n').map((line, j) => (
+              {post.content.split('\n').filter(l => l.trim()).map((line, j) => (
                 <p key={j}>{line}</p>
               ))}
             </div>

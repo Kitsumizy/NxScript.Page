@@ -20,6 +20,10 @@
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
   background: var(--bg-primary);
+  background-image: url('/bg_backdrop.gif');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
   color: var(--text-primary);
   line-height: 1.6;
 }
@@ -199,6 +203,10 @@ body {
 
 .output-success {
   color: var(--success);
+}
+
+.output-info {
+  color: var(--text-secondary);
 }
 
 /* Try Page */
