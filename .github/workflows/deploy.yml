@@ -1,0 +1,89 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout NxScriptPage
+        uses: actions/checkout@v4
+        with:
+          path: NxScriptPage
+
+      - name: Checkout NxScript
+        uses: actions/checkout@v4
+        with:
+          repository: senioritaelizabeth/NxScript
+          path: NxScript
+
+      - name: Setup Haxe
+        uses: krdlab/setup-haxe@v1
+        with:
+          haxe-version: "4.3.7"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: NxScriptPage/package-lock.json
+
+      - name: Install Haxe dependencies
+        working-directory: NxScript
+        run: |
+          haxelib install hxcpp --quiet
+          haxelib install prismcli --quiet
+
+      - name: Build NxScript JS
+        working-directory: NxScript
+        run: haxe build_js.hxml
+
+      - name: Generate API XML
+        working-directory: NxScript
+        run: |
+          haxelib install dox --quiet
+          haxe doc.hxml
+
+      - name: Copy assets to NxScriptPage
+        run: |
+          cp NxScript/bin/nxscript.js NxScriptPage/public/
+          cp NxScript/docs/api.xml NxScriptPage/public/
+
+      - name: Install NxScriptPage dependencies
+        working-directory: NxScriptPage
+        run: npm ci
+
+      - name: Build NxScriptPage
+        working-directory: NxScriptPage
+        run: npm run build
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: ./NxScriptPage/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
