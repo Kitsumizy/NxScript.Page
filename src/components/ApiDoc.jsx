@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import ReactMarkdown from 'react-markdown'
 
 function ApiDoc() {
   const [apiData, setApiData] = useState(null)
@@ -17,26 +18,26 @@ function ApiDoc() {
         const classNodes = doc.querySelectorAll('class, abstract, enum')
         classNodes.forEach(cls => {
           const path = cls.getAttribute('path')
-          if (!path) return
+          if (!path || !path.startsWith('nx.')) return
           
           const type = cls.tagName
           const fields = []
           const methods = []
-          const properties = []
           
-          // Get fields
+          // Get fields (only public)
           cls.querySelectorAll('field').forEach(field => {
+            if (field.getAttribute('public') !== '1') return
             fields.push({
               name: field.getAttribute('name'),
               type: field.getAttribute('type') || field.querySelector('x')?.textContent || '',
-              access: field.getAttribute('access') || 'public',
               isStatic: field.getAttribute('static') === 'true',
               description: field.querySelector('haxe_doc')?.textContent || ''
             })
           })
           
-          // Get methods
+          // Get methods (only public)
           cls.querySelectorAll('method').forEach(method => {
+            if (method.getAttribute('public') !== '1') return
             const params = []
             method.querySelectorAll('param').forEach(p => {
               params.push({
@@ -45,7 +46,7 @@ function ApiDoc() {
               })
             })
             
-            const returnsNode = method.querySelector('f')?.getAttribute('a') || ''
+            const returnsNode = method.querySelector('f')
             methods.push({
               name: method.getAttribute('name'),
               params: params,
@@ -61,10 +62,10 @@ function ApiDoc() {
             fullPath: path,
             type: type,
             description: descNode ? descNode.textContent : '',
-            fields: fields.filter(f => !f.isStatic),
             staticFields: fields.filter(f => f.isStatic),
-            methods: methods.filter(m => !m.isStatic),
-            staticMethods: methods.filter(m => m.isStatic)
+            fields: fields.filter(f => !f.isStatic),
+            staticMethods: methods.filter(m => m.isStatic),
+            methods: methods.filter(m => !m.isStatic)
           })
         })
 
@@ -205,24 +206,30 @@ function ApiDoc() {
                 border: '1px solid var(--border)',
                 marginBottom: '2rem'
               }}>
-                <p style={{ color: 'var(--text-secondary)', lineHeight: '1.8' }}>{selected.description}</p>
+                <ReactMarkdown
+                  components={{
+                    p: ({children}) => <p style={{ color: 'var(--text-secondary)', lineHeight: '1.8', margin: 0 }}>{children}</p>
+                  }}
+                >
+                  {selected.description}
+                </ReactMarkdown>
               </div>
             )}
 
-            {selected.staticFields.length > 0 && (
-              <Section title="Static Fields" items={selected.staticFields} />
-            )}
-            
-            {selected.fields.length > 0 && (
-              <Section title="Instance Fields" items={selected.fields} />
-            )}
-            
             {selected.staticMethods.length > 0 && (
               <Section title="Static Methods" items={selected.staticMethods} type="method" />
             )}
             
+            {selected.staticFields.length > 0 && (
+              <Section title="Static Variables" items={selected.staticFields} type="field" />
+            )}
+            
             {selected.methods.length > 0 && (
-              <Section title="Instance Methods" items={selected.methods} type="method" />
+              <Section title="Methods" items={selected.methods} type="method" />
+            )}
+            
+            {selected.fields.length > 0 && (
+              <Section title="Variables" items={selected.fields} type="field" />
             )}
           </div>
         ) : (
@@ -289,9 +296,25 @@ function Section({ title, items, type = 'field' }) {
                 )}
               </code>
               {item.description && (
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: '1.6', margin: 0 }}>
+                <ReactMarkdown
+                  components={{
+                    p: ({children}) => (
+                      <p style={{ 
+                        color: 'var(--text-secondary)', 
+                        fontSize: '0.85rem', 
+                        lineHeight: '1.6', 
+                        margin: '0.5rem 0 0 0',
+                        maxHeight: '4rem',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>
+                        {children.length > 150 ? children.substring(0, 150) + '...' : children}
+                      </p>
+                    )
+                  }}
+                >
                   {item.description}
-                </p>
+                </ReactMarkdown>
               )}
             </div>
           ))}
