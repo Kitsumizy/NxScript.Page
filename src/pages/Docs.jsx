@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 
 function Docs() {
   const [activeDoc, setActiveDoc] = useState('getting-started')
@@ -7,11 +9,18 @@ function Docs() {
   const docs = {
     'getting-started': {
       title: 'Getting Started',
+      icon: '🚀',
       content: `
 ## Installation
 
 \`\`\`bash
 haxelib git nxscript https://github.com/senioritaelizabeth/NxScript.git
+\`\`\`
+
+Add to your \`build.hxml\`:
+
+\`\`\`hxml
+-lib nxscript
 \`\`\`
 
 ## Quick Start
@@ -63,6 +72,7 @@ for (item in array) trace(item)
     },
     'language-basics': {
       title: 'Language Basics',
+      icon: '📚',
       content: `
 ## Variables
 
@@ -102,10 +112,25 @@ var and = true && false
 var or = true || false
 var not = !true
 \`\`\`
+
+## Null Coalescing
+
+\`\`\`nx
+var name = userInput ?? "anonymous"
+var port = config.port ?? 8080
+\`\`\`
+
+## Optional Chaining
+
+\`\`\`nx
+var city = user?.address?.city
+var tag = node?.children?.first() ?? "none"
+\`\`\`
       `
     },
     'classes': {
       title: 'Classes & Methods',
+      icon: '🏗️',
       content: `
 ## Class Definition
 
@@ -158,37 +183,287 @@ class Counter {
     }
 }
 \`\`\`
+
+## Enums
+
+\`\`\`nx
+enum Direction { North, South, East, West }
+enum Result { Ok(value), Err(message) }
+
+var dir = Direction["North"]
+var ok = Result["Ok"](42)
+\`\`\`
+      `
+    },
+    'match': {
+      title: 'Pattern Matching',
+      icon: '🎯',
+      content: `
+## Match Expression
+
+\`\`\`nx
+match score {
+    case 90...100 => "A"
+    case 80...89  => "B"
+    case 70...79  => "C"
+    default       => "F"
+}
+\`\`\`
+
+## Type Matching
+
+\`\`\`nx
+match value {
+    case String  => "is a string"
+    case Number  => "is a number"
+    case n       => "bound: " + n
+}
+\`\`\`
+
+## Switch (alias for match)
+
+\`\`\`nx
+switch cmd {
+    case "attack" => dealDamage()
+    case "flee"   => runAway()
+    default       => trace("unknown")
+}
+\`\`\`
+
+## Array Destructuring
+
+\`\`\`nx
+match [10, 20, 30] {
+    case [a, b]     => a + b
+    case [a, b, c]  => a + b + c
+    default         => 0
+}
+\`\`\`
+      `
+    },
+    'haxe-integration': {
+      title: 'Haxe Integration',
+      icon: '🔗',
+      content: `
+## Expose Haxe Objects
+
+\`\`\`haxe
+interp.globals.set("game", interp.vm.haxeToValue(this));
+\`\`\`
+
+\`\`\`nx
+# In script
+game.addSprite(sprite)
+game.score = 100
+\`\`\`
+
+## NxProxy - Script Class Instances
+
+\`\`\`haxe
+interp.run('
+    class Enemy {
+        var hp = 100
+        func takeDamage(n) { this.hp -= n }
+    }
+');
+
+var enemy:Dynamic = NxProxy.instantiate(interp, "Enemy", []);
+enemy.takeDamage(30);
+trace(enemy.hp); // 70
+\`\`\`
+
+## NativeProxy - Hot Loop Optimization
+
+\`\`\`haxe
+var result = NativeProxy.wrapMany(vm, sprites, ["x","y","angle","color"]);
+vm.globals.set("sprites", VArray(result.values));
+
+interp.run(script);
+
+NativeProxy.flushAll(result.proxies);
+\`\`\`
+
+## Per-Frame Calls
+
+\`\`\`haxe
+var updateFn = interp.vm.resolveCallable("update");
+var args = [VNumber(0.0)];
+
+// every frame:
+args[0] = VNumber(elapsed);
+interp.vm.callResolved(updateFn, args);
+\`\`\`
       `
     }
   }
 
   return (
-    <div className="docs-container">
-      <aside className="docs-sidebar">
-        <h3>Documentation</h3>
-        <ul>
+    <div className="docs-container" style={{ 
+      display: 'grid', 
+      gridTemplateColumns: '280px 1fr', 
+      gap: '2rem',
+      maxWidth: '1400px',
+      margin: '0 auto'
+    }}>
+      {/* Sidebar */}
+      <aside style={{ 
+        background: 'var(--bg-secondary)', 
+        borderRadius: '12px', 
+        padding: '1.5rem',
+        border: '1px solid var(--border)',
+        height: 'fit-content',
+        position: 'sticky',
+        top: '2rem'
+      }}>
+        <h3 style={{ color: 'var(--accent)', marginBottom: '1.5rem', fontSize: '1.1rem' }}>
+          Documentation
+        </h3>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
           {Object.entries(docs).map(([key, doc]) => (
-            <li key={key}>
+            <li key={key} style={{ marginBottom: '0.25rem' }}>
               <button
                 onClick={() => setActiveDoc(key)}
                 style={{
-                  background: 'none',
-                  border: 'none',
-                  color: activeDoc === key ? 'var(--accent)' : 'var(--text-secondary)',
-                  cursor: 'pointer',
-                  textAlign: 'left',
                   width: '100%',
-                  padding: '0.5rem 0'
+                  textAlign: 'left',
+                  padding: '0.6rem 0.8rem',
+                  background: activeDoc === key ? 'var(--accent)' : 'transparent',
+                  border: 'none',
+                  borderRadius: '6px',
+                  color: activeDoc === key ? '#000' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  fontSize: '0.95rem',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}
+                onMouseEnter={(e) => {
+                  if (activeDoc !== key) {
+                    e.target.style.background = 'var(--bg-tertiary)'
+                    e.target.style.color = 'var(--text-primary)'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeDoc !== key) {
+                    e.target.style.background = 'transparent'
+                    e.target.style.color = 'var(--text-secondary)'
+                  }
                 }}
               >
-                {doc.title}
+                <span>{doc.icon}</span>
+                <span>{doc.title}</span>
               </button>
             </li>
           ))}
         </ul>
       </aside>
-      <div className="docs-content">
-        <ReactMarkdown>{docs[activeDoc].content}</ReactMarkdown>
+
+      {/* Content */}
+      <div className="docs-content" style={{
+        background: 'var(--bg-secondary)',
+        borderRadius: '12px',
+        padding: '2.5rem',
+        border: '1px solid var(--border)',
+        minHeight: 'calc(100vh - 200px)'
+      }}>
+        <div style={{ marginBottom: '2rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border)' }}>
+          <h1 style={{ color: 'var(--accent)', fontSize: '2.5rem', marginBottom: '0.5rem' }}>
+            {docs[activeDoc].icon} {docs[activeDoc].title}
+          </h1>
+        </div>
+        
+        <ReactMarkdown
+          children={docs[activeDoc].content}
+          components={{
+            code({node, inline, className, children, ...props}) {
+              const match = /language-(\w+)/.exec(className || '')
+              return !inline && match ? (
+                <SyntaxHighlighter
+                  style={vscDarkPlus}
+                  language={match[1]}
+                  PreTag="div"
+                  {...props}
+                >
+                  {String(children).replace(/\n$/, '')}
+                </SyntaxHighlighter>
+              ) : (
+                <code className={className} {...props} style={{
+                  background: 'var(--bg-tertiary)',
+                  padding: '0.2rem 0.5rem',
+                  borderRadius: '4px',
+                  fontFamily: "'Fira Code', monospace",
+                  fontSize: '0.9em',
+                  color: 'var(--success)'
+                }}>
+                  {children}
+                </code>
+              )
+            },
+            pre({children}) {
+              return <div style={{ margin: '1.5rem 0' }}>{children}</div>
+            },
+            h2({children}) {
+              return (
+                <h2 style={{
+                  color: 'var(--text-primary)',
+                  fontSize: '1.8rem',
+                  marginTop: '2.5rem',
+                  marginBottom: '1rem',
+                  paddingBottom: '0.5rem',
+                  borderBottom: '1px solid var(--border)'
+                }}>
+                  {children}
+                </h2>
+              )
+            },
+            h3({children}) {
+              return (
+                <h3 style={{
+                  color: 'var(--text-primary)',
+                  fontSize: '1.4rem',
+                  marginTop: '2rem',
+                  marginBottom: '0.8rem'
+                }}>
+                  {children}
+                </h3>
+              )
+            },
+            p({children}) {
+              return (
+                <p style={{
+                  color: 'var(--text-secondary)',
+                  lineHeight: '1.8',
+                  marginBottom: '1rem',
+                  fontSize: '1.05rem'
+                }}>
+                  {children}
+                </p>
+              )
+            },
+            ul({children}) {
+              return (
+                <ul style={{
+                  marginBottom: '1rem',
+                  paddingLeft: '1.5rem',
+                  color: 'var(--text-secondary)'
+                }}>
+                  {children}
+                </ul>
+              )
+            },
+            li({children}) {
+              return (
+                <li style={{
+                  marginBottom: '0.5rem',
+                  lineHeight: '1.6'
+                }}>
+                  {children}
+                </li>
+              )
+            }
+          }}
+        />
       </div>
     </div>
   )
