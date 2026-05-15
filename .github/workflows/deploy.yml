@@ -57,6 +57,7 @@ jobs:
         working-directory: NxScript
         run: |
           haxelib install dox --quiet
+          mkdir -p docs
           haxe doc.hxml
 
       - name: Copy assets to NxScriptPage
