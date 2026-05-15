@@ -57,6 +57,8 @@ jobs:
           haxelib install dox --quiet
           mkdir -p docs
           haxe doc.hxml
+          ls -la docs/
+          if [ ! -f docs/api.xml ]; then echo "ERROR: api.xml not generated"; exit 1; fi
           # dir is needed for the API XML to be included in the artifact
           # lets dir on general and then docs
           ls -la
@@ -65,7 +67,14 @@ jobs:
       - name: Copy assets to NxScriptPage
         run: |
           cp NxScript/bin/nxscript.js NxScriptPage/public/
-          cp NxScript/docs/api.xml NxScriptPage/public/
+          if [ -f NxScript/docs/api.xml ]; then
+            cp NxScript/docs/api.xml NxScriptPage/public/
+          elif [ -f NxScript/doc.xml ]; then
+            cp NxScript/doc.xml NxScriptPage/public/api.xml
+          else
+            echo "ERROR: No API XML found"
+            exit 1
+          fi
 
       - name: Install NxScriptPage dependencies
         working-directory: NxScriptPage
