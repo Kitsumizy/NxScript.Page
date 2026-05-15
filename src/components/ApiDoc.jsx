@@ -7,6 +7,108 @@ function ApiDoc() {
   const [selectedClass, setSelectedClass] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
 
+  function cleanDescription(text) {
+    if (!text) return ''
+    return text
+      .split('\n')
+      .map(line => line.replace(/^\s*\*\s?/, ''))
+      .join('\n')
+      .trim()
+  }
+
+  function parseDocAnnotations(text) {
+    if (!text) return { description: '', annotations: {} }
+    
+    const cleaned = cleanDescription(text)
+    const lines = cleaned.split('\n')
+    const descriptionLines = []
+    const annotations = { params: [], returns: null, examples: [] }
+    
+    let currentSection = 'description'
+    
+    for (const line of lines) {
+      const trimmed = line.trim()
+      
+      if (trimmed.startsWith('@param')) {
+        currentSection = 'param'
+        const match = trimmed.match(/@param\s+(\w+)\s*(.*)/)
+        if (match) {
+          annotations.params.push({ name: match[1], description: match[2] })
+        }
+        continue
+      }
+      
+      if (trimmed.startsWith('@return')) {
+        currentSection = 'returns'
+        annotations.returns = trimmed.replace(/@return\s*/, '')
+        continue
+      }
+      
+      if (trimmed.startsWith('@example')) {
+        currentSection = 'example'
+        continue
+      }
+      
+      if (trimmed.startsWith('@')) {
+        currentSection = 'other'
+        continue
+      }
+      
+      if (currentSection === 'description') {
+        descriptionLines.push(line)
+      }
+    }
+    
+    return {
+      description: descriptionLines.join('\n').trim(),
+      annotations
+    }
+  }
+
+  function getTypeName(node) {
+    if (!node) return ''
+    if (node.tagName === 'x' && node.getAttribute('path')) {
+      return node.getAttribute('path')
+    }
+    if (node.tagName === 'c' || node.tagName === 't' || node.tagName === 'e') {
+      return node.getAttribute('path') || ''
+    }
+    if (node.tagName === 'd') {
+      return 'Dynamic'
+    }
+    return node.textContent || ''
+  }
+
+  function parseFunction(fNode, attr) {
+    if (!fNode) return { params: [], returns: '' }
+    
+    const children = Array.from(fNode.children)
+    if (children.length === 0) return { params: [], returns: '' }
+    
+    // Last child is return type, rest are param types
+    const returnType = getTypeName(children[children.length - 1])
+    
+    const paramNamesRaw = attr || ''
+    const paramNames = paramNamesRaw.split(':').filter(n => n.length > 0)
+    
+    const params = []
+    for (let i = 0; i < paramNames.length; i++) {
+      const name = paramNames[i].replace(/^\?/, '')
+      const isOptional = paramNames[i].startsWith('?')
+      // Param types are all children except the last one (return type)
+      const paramTypeNode = i < children.length - 1 ? children[i] : null
+      const paramType = paramTypeNode ? getTypeName(paramTypeNode) : ''
+      
+      params.push({
+        name: name,
+        type: paramType || 'Dynamic',
+        optional: isOptional
+      })
+    }
+    
+    return { params, returns: returnType }
+  }
+
   useEffect(() => {
     fetch('/api.xml')
       .then(res => res.text())
@@ -21,51 +123,79 @@ function ApiDoc() {
           if (!path || !path.startsWith('nx.')) return
           
           const type = cls.tagName
-          const fields = []
+          const staticMethods = []
           const methods = []
+          const staticFields = []
+          const fields = []
           
-          // Get fields (only public)
-          cls.querySelectorAll('field').forEach(field => {
-            if (field.getAttribute('public') !== '1') return
-            fields.push({
-              name: field.getAttribute('name'),
-              type: field.getAttribute('type') || field.querySelector('x')?.textContent || '',
-              isStatic: field.getAttribute('static') === 'true',
-              description: field.querySelector('haxe_doc')?.textContent || ''
-            })
-          })
+          const descNode = cls.querySelector(':scope > haxe_doc')
+          const classDescription = descNode ? cleanDescription(descNode.textContent) : ''
           
-          // Get methods (only public)
-          cls.querySelectorAll('method').forEach(method => {
-            if (method.getAttribute('public') !== '1') return
-            const params = []
-            method.querySelectorAll('param').forEach(p => {
-              params.push({
-                name: p.getAttribute('name'),
-                type: p.getAttribute('type') || ''
-              })
-            })
+          Array.from(cls.children).forEach(child => {
+            const tagName = child.tagName
+            if (tagName === 'haxe_doc' || tagName === 'meta' || tagName === 'impl') return
             
-            const returnsNode = method.querySelector('f')
-            methods.push({
-              name: method.getAttribute('name'),
-              params: params,
-              returns: method.getAttribute('returns') || '',
-              isStatic: method.getAttribute('static') === 'true',
-              description: method.querySelector('haxe_doc')?.textContent || ''
-            })
+            if (child.getAttribute('public') !== '1') return
+            
+            const isStatic = child.getAttribute('static') === '1'
+            const isMethod = child.getAttribute('set') === 'method' || tagName === 'new'
+            const name = child.getAttribute('name') || tagName
+            
+            const fieldDoc = child.querySelector('haxe_doc')
+            const rawDescription = fieldDoc ? fieldDoc.textContent : ''
+            const { description, annotations } = parseDocAnnotations(rawDescription)
+            
+            if (isMethod) {
+              const fNode = child.querySelector('f')
+              const attr = fNode ? fNode.getAttribute('a') : ''
+              const { params, returns } = parseFunction(fNode, attr)
+              
+              const methodData = {
+                name: name,
+                params: params,
+                returns: annotations.returns || returns || '',
+                description: description,
+                annotations
+              }
+              
+              if (isStatic) {
+                staticMethods.push(methodData)
+              } else {
+                methods.push(methodData)
+              }
+            } else {
+              let typeNode = child.firstElementChild
+              let type = ''
+              
+              if (typeNode && typeNode.tagName !== 'haxe_doc' && typeNode.tagName !== 'meta') {
+                type = getTypeName(typeNode)
+              }
+              
+              const fieldData = {
+                name: name,
+                type: type || 'Dynamic',
+                isStatic: isStatic,
+                description: description,
+                annotations
+              }
+              
+              if (isStatic) {
+                staticFields.push(fieldData)
+              } else {
+                fields.push(fieldData)
+              }
+            }
           })
           
-          const descNode = cls.querySelector('haxe_doc')
           classes.push({
             name: path.split('.').pop(),
             fullPath: path,
             type: type,
-            description: descNode ? descNode.textContent : '',
-            staticFields: fields.filter(f => f.isStatic),
-            fields: fields.filter(f => !f.isStatic),
-            staticMethods: methods.filter(m => m.isStatic),
-            methods: methods.filter(m => !m.isStatic)
+            description: classDescription,
+            staticFields,
+            fields,
+            staticMethods,
+            methods
           })
         })
 
@@ -108,7 +238,6 @@ function ApiDoc() {
 
   return (
     <div className="api-container" style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '2rem' }}>
-      {/* Sidebar */}
       <aside style={{ 
         background: 'var(--bg-secondary)', 
         borderRadius: '12px', 
@@ -177,23 +306,23 @@ function ApiDoc() {
         </ul>
       </aside>
 
-      {/* Content */}
       <main>
         {selected ? (
           <div className="api-class-detail">
             <div style={{ marginBottom: '2rem' }}>
               <span style={{ 
                 background: 'var(--bg-tertiary)', 
-                padding: '0.3rem 0.6rem', 
+                padding: '0.25rem 0.5rem', 
                 borderRadius: '4px', 
-                fontSize: '0.8rem',
+                fontSize: '0.75rem',
                 color: 'var(--accent)',
-                marginRight: '0.5rem'
+                marginRight: '0.5rem',
+                fontWeight: '600'
               }}>
                 {selected.type.toUpperCase()}
               </span>
-              <h1 style={{ display: 'inline', color: 'var(--text-primary)', fontSize: '2rem' }}>{selected.name}</h1>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '0.5rem', fontFamily: 'monospace' }}>
+              <h1 style={{ display: 'inline', color: 'var(--text-primary)', fontSize: '1.75rem', fontWeight: '700' }}>{selected.name}</h1>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '0.5rem', fontFamily: 'monospace' }}>
                 {selected.fullPath}
               </p>
             </div>
@@ -201,14 +330,34 @@ function ApiDoc() {
             {selected.description && (
               <div style={{ 
                 background: 'var(--bg-secondary)', 
-                padding: '1.5rem', 
-                borderRadius: '12px', 
+                padding: '1.25rem', 
+                borderRadius: '8px', 
                 border: '1px solid var(--border)',
                 marginBottom: '2rem'
               }}>
                 <ReactMarkdown
                   components={{
-                    p: ({children}) => <p style={{ color: 'var(--text-secondary)', lineHeight: '1.8', margin: 0 }}>{children}</p>
+                    p: ({children}) => <p style={{ color: 'var(--text-secondary)', lineHeight: '1.7', margin: 0, fontSize: '0.95rem' }}>{children}</p>,
+                    code: ({children}) => (
+                      <code style={{ 
+                        background: 'var(--bg-tertiary)', 
+                        padding: '0.125rem 0.375rem', 
+                        borderRadius: '3px',
+                        fontSize: '0.85em',
+                        color: 'var(--success)'
+                      }}>{children}</code>
+                    ),
+                    pre: ({children}) => (
+                      <pre style={{ 
+                        background: 'var(--bg-tertiary)', 
+                        padding: '1rem', 
+                        borderRadius: '6px',
+                        overflowX: 'auto',
+                        margin: '0.75rem 0',
+                        fontSize: '0.85em',
+                        border: '1px solid var(--border)'
+                      }}>{children}</pre>
+                    )
                   }}
                 >
                   {selected.description}
@@ -247,77 +396,181 @@ function Section({ title, items, type = 'field' }) {
   const [expanded, setExpanded] = useState(true)
   
   return (
-    <div style={{ marginBottom: '2rem' }}>
+    <div style={{ marginBottom: '1.5rem' }}>
       <button
         onClick={() => setExpanded(!expanded)}
         style={{
           width: '100%',
           textAlign: 'left',
-          padding: '0.8rem 1rem',
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border)',
-          borderRadius: '8px',
-          color: 'var(--accent)',
-          fontSize: '1rem',
-          fontWeight: 'bold',
+          padding: '0.6rem 0.875rem',
+          background: 'transparent',
+          border: 'none',
+          borderBottom: '1px solid var(--border)',
+          color: 'var(--text-primary)',
+          fontSize: '0.85rem',
+          fontWeight: '600',
           cursor: 'pointer',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: '0.5rem'
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px'
         }}
       >
-        <span>{title} ({items.length})</span>
-        <span>{expanded ? '−' : '+'}</span>
+        <span>{title}</span>
+        <span style={{ color: 'var(--text-secondary)' }}>{expanded ? '−' : '+'}</span>
       </button>
       
       {expanded && (
-        <div style={{ paddingLeft: '0.5rem' }}>
+        <div style={{ paddingTop: '0.75rem' }}>
           {items.map((item, i) => (
-            <div key={i} style={{
-              background: 'var(--bg-tertiary)',
-              padding: '1rem',
-              borderRadius: '6px',
-              marginBottom: '0.5rem',
-              borderLeft: '3px solid var(--accent)'
-            }}>
-              <code style={{ 
-                color: 'var(--success)', 
-                fontSize: '0.9rem', 
-                display: 'block',
-                marginBottom: '0.5rem',
-                fontFamily: "'Fira Code', monospace"
-              }}>
-                {type === 'field' ? (
-                  <>{item.name}<span style={{ color: 'var(--text-secondary)' }}>: {item.type}</span></>
-                ) : (
-                  <>{item.name}({item.params.map(p => `${p.name}${p.type ? ': ' + p.type : ''}`).join(', ')})
-                  {item.returns && <span style={{ color: 'var(--text-secondary)' }}> → {item.returns}</span>}</>
-                )}
-              </code>
-              {item.description && (
-                <ReactMarkdown
-                  components={{
-                    p: ({children}) => (
-                      <p style={{ 
-                        color: 'var(--text-secondary)', 
-                        fontSize: '0.85rem', 
-                        lineHeight: '1.6', 
-                        margin: '0.5rem 0 0 0',
-                        maxHeight: '4rem',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                      }}>
-                        {children.length > 150 ? children.substring(0, 150) + '...' : children}
-                      </p>
-                    )
-                  }}
-                >
-                  {item.description}
-                </ReactMarkdown>
-              )}
-            </div>
+            <MemberItem key={i} item={item} type={type} />
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MemberItem({ item, type }) {
+  const [expanded, setExpanded] = useState(true)
+  const hasDetails = item.description || (item.annotations?.params?.length > 0) || item.annotations?.returns
+  
+  return (
+    <div style={{
+      marginBottom: '0.75rem'
+    }}>
+      <div 
+        onClick={() => hasDetails && setExpanded(!expanded)}
+        style={{
+          background: 'var(--bg-secondary)',
+          padding: '0.75rem 1rem',
+          borderRadius: '6px',
+          border: '1px solid var(--border)',
+          cursor: hasDetails ? 'pointer' : 'default',
+          transition: 'border-color 0.2s'
+        }}
+        onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent)'}
+        onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
+      >
+        <code style={{ 
+          color: 'var(--success)', 
+          fontSize: '0.85rem',
+          fontFamily: "'Fira Code', monospace"
+        }}>
+          {type === 'field' ? (
+            <>
+              <span style={{ fontWeight: '600' }}>{item.name}</span>
+              <span style={{ color: 'var(--text-secondary)' }}>: {item.type}</span>
+            </>
+          ) : (
+            <>
+              <span style={{ fontWeight: '600' }}>{item.name}</span>
+              <span style={{ color: 'var(--text-secondary)' }}>(</span>
+              {item.params.map((p, j) => (
+                <span key={j}>
+                  {j > 0 && <span style={{ color: 'var(--text-secondary)' }}>, </span>}
+                  {p.optional && <span style={{ color: 'var(--text-secondary)' }}>[</span>}
+                  <span>{p.name}</span>
+                  {p.type && <span style={{ color: 'var(--text-secondary)' }}>: {p.type}</span>}
+                  {p.optional && <span style={{ color: 'var(--text-secondary)' }}>]</span>}
+                </span>
+              ))}
+              <span style={{ color: 'var(--text-secondary)' }}>)</span>
+              {item.returns && (
+                <>
+                  <span style={{ color: 'var(--text-secondary)' }}> → </span>
+                  <span style={{ color: 'var(--accent)' }}>{item.returns}</span>
+                </>
+              )}
+            </>
+          )}
+        </code>
+        
+        {hasDetails && (
+          <span style={{ 
+            float: 'right', 
+            color: 'var(--text-secondary)', 
+            fontSize: '0.75rem',
+            opacity: 0.5
+          }}>
+            {expanded ? '−' : '+'}
+          </span>
+        )}
+      </div>
+      
+      {expanded && hasDetails && (
+        <div style={{
+          padding: '0.75rem 1rem',
+          fontSize: '0.85rem',
+          color: 'var(--text-secondary)',
+          lineHeight: '1.6',
+          background: 'var(--bg-secondary)',
+          borderRadius: '0 0 6px 6px',
+          marginTop: '-1px',
+          borderTop: '1px solid var(--border)'
+        }}>
+          {item.description && (
+            <div style={{ marginBottom: item.annotations?.params?.length > 0 || item.annotations?.returns ? '0.75rem' : '0' }}>
+              <ReactMarkdown
+                components={{
+                  p: ({children}) => <p style={{ margin: 0 }}>{children}</p>,
+                  code: ({children}) => (
+                    <code style={{ 
+                      background: 'var(--bg-tertiary)', 
+                      padding: '0.125rem 0.375rem', 
+                      borderRadius: '3px',
+                      fontSize: '0.85em',
+                      color: 'var(--success)'
+                    }}>{children}</code>
+                  ),
+                  pre: ({children}) => (
+                    <pre style={{ 
+                      background: 'var(--bg-tertiary)', 
+                      padding: '1rem', 
+                      borderRadius: '6px',
+                      overflowX: 'auto',
+                      margin: '0.75rem 0',
+                      fontSize: '0.85em',
+                      border: '1px solid var(--border)'
+                    }}>{children}</pre>
+                  )
+                }}
+              >
+                {item.description}
+              </ReactMarkdown>
+            </div>
+          )}
+          
+          {item.annotations?.returns && (
+            <div style={{ 
+              marginBottom: item.annotations?.params?.length > 0 ? '0.5rem' : '0',
+              paddingLeft: '0.75rem',
+              borderLeft: '2px solid var(--accent)'
+            }}>
+              <strong style={{ color: 'var(--text-primary)', fontSize: '0.8rem' }}>Returns: </strong>
+              <span>{item.annotations.returns}</span>
+            </div>
+          )}
+          
+          {item.annotations?.params?.length > 0 && (
+            <div style={{ paddingLeft: '0.75rem', borderLeft: '2px solid var(--border)' }}>
+              {item.annotations.params.map((param, j) => (
+                <div key={j} style={{ marginBottom: j < item.annotations.params.length - 1 ? '0.375rem' : '0' }}>
+                  <code style={{ 
+                    color: 'var(--success)',
+                    fontSize: '0.8em',
+                    background: 'var(--bg-tertiary)',
+                    padding: '0.125rem 0.375rem',
+                    borderRadius: '3px'
+                  }}>{param.name}</code>
+                  {param.description && (
+                    <span style={{ marginLeft: '0.375rem' }}>{param.description}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

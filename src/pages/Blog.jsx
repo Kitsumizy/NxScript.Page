@@ -1,3 +1,7 @@
+import ReactMarkdown from 'react-markdown'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
+
 function Blog() {
   const posts = [
     {
@@ -53,10 +57,97 @@ Stay tuned for more updates!
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
               {new Date(post.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
-            <div style={{ color: 'var(--text-secondary)', lineHeight: '1.8' }}>
-              {post.content.split('\n').filter(l => l.trim()).map((line, j) => (
-                <p key={j}>{line}</p>
-              ))}
+            <div style={{ color: 'var(--text-secondary)', lineHeight: '1.7' }}>
+              <ReactMarkdown
+                components={{
+                  code({node, inline, className, children, ...props}) {
+                    const match = /language-(\w+)/.exec(className || '')
+                    return !inline && match ? (
+                      <SyntaxHighlighter
+                        style={vscDarkPlus}
+                        language={match[1]}
+                        PreTag="div"
+                        customStyle={{
+                          borderRadius: '8px',
+                          fontSize: '0.9rem',
+                          lineHeight: '1.5',
+                          margin: '1rem 0'
+                        }}
+                        {...props}
+                      >
+                        {String(children).replace(/\n$/, '')}
+                      </SyntaxHighlighter>
+                    ) : (
+                      <code className={className} {...props} style={{
+                        background: 'var(--bg-tertiary)',
+                        padding: '0.2rem 0.5rem',
+                        borderRadius: '4px',
+                        fontFamily: "'Fira Code', monospace",
+                        fontSize: '0.9em',
+                        color: 'var(--success)'
+                      }}>
+                        {children}
+                      </code>
+                    )
+                  },
+                  h2({children}) {
+                    return (
+                      <h2 style={{
+                        color: 'var(--accent)',
+                        fontSize: '1.5rem',
+                        marginTop: '1.5rem',
+                        marginBottom: '0.75rem'
+                      }}>
+                        {children}
+                      </h2>
+                    )
+                  },
+                  h3({children}) {
+                    return (
+                      <h3 style={{
+                        color: 'var(--text-primary)',
+                        fontSize: '1.2rem',
+                        marginTop: '1.25rem',
+                        marginBottom: '0.5rem'
+                      }}>
+                        {children}
+                      </h3>
+                    )
+                  },
+                  p({children}) {
+                    return (
+                      <p style={{
+                        marginBottom: '0.75rem',
+                        lineHeight: '1.6'
+                      }}>
+                        {children}
+                      </p>
+                    )
+                  },
+                  ol({children}) {
+                    return (
+                      <ol style={{
+                        marginBottom: '1rem',
+                        paddingLeft: '1.5rem'
+                      }}>
+                        {children}
+                      </ol>
+                    )
+                  },
+                  li({children}) {
+                    return (
+                      <li style={{
+                        marginBottom: '0.4rem',
+                        lineHeight: '1.5'
+                      }}>
+                        {children}
+                      </li>
+                    )
+                  }
+                }}
+              >
+                {post.content}
+              </ReactMarkdown>
             </div>
           </article>
         ))}

@@ -26,17 +26,54 @@ trace("Player HP: " + p.hp)
   const [interp, setInterp] = useState(null)
 
   useEffect(() => {
+    // Intercept console.log to capture trace output
+    const originalLog = console.log
+    const originalError = console.error
+    
+    console.log = (...args) => {
+      const msg = args.map(a => String(a)).join(' ')
+      setOutput(prev => [...prev, { type: 'info', text: msg }])
+      originalLog(...args)
+    }
+    
+    console.error = (...args) => {
+      const msg = args.map(a => String(a)).join(' ')
+      setOutput(prev => [...prev, { type: 'error', text: msg }])
+      originalError(...args)
+    }
+    
+    if (window.nxs_create) {
+      const vmId = window.nxs_create()
+      setInterp({ vmId, ready: true })
+      return
+    }
+    
     const script = document.createElement('script')
     script.src = '/nxscript.js'
+    script.async = true
+    
     script.onload = () => {
+      console.log('nxscript.js loaded, checking for nxs_create...')
       if (window.nxs_create) {
         const vmId = window.nxs_create()
+        console.log('Created VM with id:', vmId)
         setInterp({ vmId, ready: true })
+      } else {
+        console.error('nxs_create not found after script load. window keys:', Object.keys(window).filter(k => k.startsWith('nxs')))
+        setOutput(prev => [...prev, { type: 'error', text: 'Failed to initialize NxScript runtime' }])
       }
     }
+    
+    script.onerror = () => {
+      console.error('Failed to load nxscript.js')
+      setOutput(prev => [...prev, { type: 'error', text: 'Failed to load NxScript runtime' }])
+    }
+    
     document.head.appendChild(script)
 
     return () => {
+      console.log = originalLog
+      console.error = originalError
       if (interp && window.nxs_free) {
         window.nxs_free(interp.vmId)
       }
@@ -49,15 +86,16 @@ trace("Player HP: " + p.hp)
       return
     }
 
+    setOutput([])
     setOutput(prev => [...prev, { type: 'info', text: 'Running...' }])
 
     try {
       const error = window.nxs_run(interp.vmId, code, 'repl.nx')
-      if (error) {
+      if (error && error.length > 0) {
         setOutput(prev => [...prev, { type: 'error', text: error }])
       }
     } catch (e) {
-      setOutput(prev => [...prev, { type: 'error', text: e.message }])
+      setOutput(prev => [...prev, { type: 'error', text: e.message || String(e) }])
     }
   }
 
