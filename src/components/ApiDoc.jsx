@@ -110,7 +110,7 @@ function ApiDoc() {
   }
 
   useEffect(() => {
-    fetch('/api.xml')
+    fetch('/NxScript.Page/api.xml')
       .then(res => res.text())
       .then(xml => {
         const parser = new DOMParser()

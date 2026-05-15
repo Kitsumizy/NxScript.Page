@@ -49,7 +49,7 @@ trace("Player HP: " + p.hp)
     }
     
     const script = document.createElement('script')
-    script.src = '/nxscript.js'
+    script.src = 'NxScript.Page/nxscript.js'
     script.async = true
     
     script.onload = () => {
