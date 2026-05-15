@@ -51,13 +51,16 @@ jobs:
       - name: Build NxScript JS
         working-directory: NxScript
         run: haxe build_js.hxml
-
       - name: Generate API XML
         working-directory: NxScript
         run: |
           haxelib install dox --quiet
           mkdir -p docs
           haxe doc.hxml
+          # dir is needed for the API XML to be included in the artifact
+          # lets dir on general and then docs
+          ls -la
+          ls -la docs
 
       - name: Copy assets to NxScriptPage
         run: |
