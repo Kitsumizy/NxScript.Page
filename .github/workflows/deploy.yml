@@ -28,8 +28,9 @@ jobs:
       - name: Checkout NxScript
         uses: actions/checkout@v4
         with:
-          repository: senioritaelizabeth/NxScript
+          repository: Kitsumizy/NxScript
           path: NxScript
+          branch: dev
 
       - name: Setup Haxe
         uses: krdlab/setup-haxe@v1
